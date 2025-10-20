@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Biblioteca Digital — Aprimorada</title>
+  <meta name="description" content="Contadores, histórico, exportação e visualização — versão aprimorada." />
+  <style>
+    :root{
+      --bg-dark: linear-gradient(135deg,#2c3e50 0%,#3498db 100%);
+      --glass: rgba(255,255,255,0.08);
+      --muted: rgba(255,255,255,0.85);
+      --accent: #f39c12;
+      --danger: #e74c3c;
+      --success: #27ae60;
+      --card-radius: 14px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.35);
+    }
+
+    /* Light mode overrides */
+    body.light{
+      --bg-dark: linear-gradient(135deg,#f5f7fa 0%,#ffffff 100%);
+      --glass: rgba(0,0,0,0.05);
+      --muted: #222;
+      --accent: #ff8a00;
+      --danger: #c0392b;
+      --success: #1e8449;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      margin:0;min-height:100%;display:flex;align-items:center;justify-content:center;
+      background:var(--bg-dark);color:var(--muted);
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+      padding:24px;
+    }
+
+    .app{
+      width:100%;max-width:1100px;border-radius:18px;padding:22px;background:var(--glass);
+      backdrop-filter: blur(8px); box-shadow:var(--shadow);position:relative;overflow:hidden;
+    }
+
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+    h1{font-size:1.6rem;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    .btn{background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.12);padding:8px 12px;border-radius:10px;color:var(--muted);cursor:pointer;font-weight:600}
+    .btn:focus{outline:3px solid rgba(255,255,255,0.12)}
+    .btn.icon{display:inline-flex;align-items:center;gap:8px}
+
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    @media (max-width:880px){.grid{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:520px){.grid{grid-template-columns:1fr}}
+
+    .card{background:rgba(0,0,0,0.12);padding:14px;border-radius:12px;display:flex;align-items:center;justify-content:space-between}
+    .card .left{display:flex;gap:12px;align-items:center}
+    .icon-wrap{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.06);font-size:1.25rem}
+    .label{font-weight:700}
+    .count{background:var(--accent);color:#fff;padding:8px 10px;border-radius:999px;font-weight:800;min-width:48px;text-align:center}
+
+    .panel{margin-top:14px;display:grid;grid-template-columns:1fr 360px;gap:12px}
+    @media (max-width:1000px){.panel{grid-template-columns:1fr}}
+
+    .history, .chart-card{background:rgba(0,0,0,0.06);padding:14px;border-radius:12px}
+    .history h3, .chart-card h3{margin:0 0 8px 0}
+    .history-list{max-height:320px;overflow:auto;padding-right:6px}
+    .history-item{padding:8px;border-bottom:1px dashed rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:8px}
+    .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+    .small{font-size:0.85rem;color:rgba(255,255,255,0.8)}
+
+    /* modal */
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:40}
+    .modal.open{display:flex}
+    .modal-card{background:var(--glass);padding:18px;border-radius:12px;width:100%;max-width:560px}
+
+    /* toast */
+    .toast{position:fixed;right:20px;bottom:20px;background:var(--success);color:#fff;padding:12px 16px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.35);z-index:50;opacity:0;transform:translateY(20px);transition:all .35s}
+    .toast.show{opacity:1;transform:none}
+
+    /* focus visible */
+    :focus{outline:none}
+    .focus-visible{box-shadow:0 0 0 3px rgba(255,255,255,0.08)}
+
+    footer{margin-top:12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+
+    /* accessibility helpers */
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+    /* micro animations */
+    .btn.animate{transition:transform .12s ease}
+    .btn.animate:active{transform:scale(.98)}
+
+    /* chart canvas sizing */
+    canvas{max-width:100%}
+  </style>
+</head>
+<body>
+  <main class="app" id="app" role="application" aria-label="Biblioteca digital aprimorada">
+    <header>
+      <div>
+        <h1>📚 Biblioteca Digital — Aprimorada</h1>
+        <div class="small">Contadores, histórico, exportação e visualização</div>
+      </div>
+      <div class="controls" role="toolbar" aria-label="Controles principais">
+        <button class="btn icon" id="btnToggleTheme" aria-pressed="false" title="Alternar tema (Esc para fechar)" aria-label="Alternar tema">🌙 Tema</button>
+        <button class="btn" id="btnExport" aria-haspopup="menu" aria-controls="exportMenu">📤 Exportar</button>
+        <button class="btn" id="btnReset">🔄 Reset</button>
+        <button class="btn" id="btnHistory">📜 Histórico</button>
+      </div>
+    </header>
+
+    <section class="grid" id="buttonsGrid" aria-label="Categorias">
+      <!-- buttons gerados por JS -->
+    </section>
+
+    <section class="panel">
+      <div class="history" aria-live="polite">
+        <h3>Últimas entradas</h3>
+        <div class="filters" id="historyFilters">
+          <select id="filterCategoria" aria-label="Filtrar por categoria">
+            <option value="all">Todas as categorias</option>
+          </select>
+          <input type="date" id="filterData" aria-label="Filtrar por data" />
+          <button class="btn" id="btnAplicarFiltro">Filtrar</button>
+          <button class="btn" id="btnLimparFiltro">Limpar</button>
+        </div>
+        <div class="history-list" id="historyList" tabindex="0"></div>
+      </div>
+
+      <aside class="chart-card">
+        <h3>Estatísticas</h3>
+        <canvas id="chart"></canvas>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn" id="btnExportCSV">Exportar CSV</button>
+          <button class="btn" id="btnBackupJSON">Backup JSON</button>
+          <div style="margin-left:auto;font-weight:700" id="totalDisplay">Total: 0</div>
+        </div>
+      </aside>
+    </section>
+
+    <footer>
+      <div class="small">Versão: 1.0</div>
+    </footer>
+  </main>
+
+  <!-- Modal reset / confirm -->
+  <div class="modal" id="modalReset" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-card">
+      <h3>🔄 Resetar contadores</h3>
+      <p class="small">Escolha o que quer resetar:</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn" id="resetAll">Resetar Tudo</button>
+        <div id="resetButtonsContainer"></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" id="closeReset">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Modal full view -->
+  <div class="modal" id="modalHistory" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-card">
+      <h3>📜 Histórico completo</h3>
+      <div id="modalHistoryList" style="max-height:400px;overflow:auto;margin-top:8px"></div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn" id="closeHistory">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast area -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    // -------------------- Dados iniciais e estrutura --------------------
+    const categorias = [
+      { id: 'xadrez', label:'Xadrez', icon:'♞'},
+      { id: 'leitura', label:'Leitura', icon:'📚'},
+      { id: 'estudar', label:'Estudar', icon:'🎓'},
+      { id: 'apoio', label:'Apoio', icon:'🤝'},
+      { id: 'computadores', label:'Computadores', icon:'💻'},
+      { id: 'outros', label:'Outros', icon:'🔧'}
+    ];
+
+    // Estrutura armazenada em localStorage
+    const STORAGE_KEY = 'biblioteca_data_v2';
+    let data = {
+      contadores: {},
+      historico: [],
+      meta: { created: new Date().toISOString() }
+    };
+
+    // inicializa contadores
+    function initData(){
+      categorias.forEach(c=> data.contadores[c.id] = data.contadores[c.id] || 0);
+      data.contadores.total = data.contadores.total || 0;
+    }
+
+    // carregar do storage
+    function load(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(raw){
+          const parsed = JSON.parse(raw);
+          data = Object.assign(data, parsed);
+        }
+      }catch(e){ console.warn('Erro a carregar storage', e); }
+      initData();
+    }
+
+    // salvar no storage
+    function save(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    // -------------------- UI: gerar botões --------------------
+    const grid = document.getElementById('buttonsGrid');
+    const filterSelect = document.getElementById('filterCategoria');
+
+    function criarBotoes(){
+      grid.innerHTML = '';
+      categorias.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'card btn animate';
+        btn.setAttribute('aria-label', `Abrir ${cat.label}`);
+        btn.onclick = () => registrarEntrada(cat.id);
+
+        const left = document.createElement('div'); left.className = 'left';
+        const iconWrap = document.createElement('div'); iconWrap.className = 'icon-wrap'; iconWrap.textContent = cat.icon;
+        const label = document.createElement('div');
+        label.innerHTML = `<div class="label">${cat.label}</div><div class="small">Clique para registar</div>`;
+        left.appendChild(iconWrap); left.appendChild(label);
+
+        const count = document.createElement('div'); count.className = 'count'; count.id = `count-${cat.id}`; count.textContent = data.contadores[cat.id] || 0;
+
+        btn.appendChild(left); btn.appendChild(count);
+        grid.appendChild(btn);
+
+        // opção de reset individual no modal reset
+        const opt = document.createElement('button'); opt.className = 'btn'; opt.textContent = `Reset ${cat.label}`;
+        opt.onclick = () => resetIndividual(cat.id);
+        opt.setAttribute('aria-label', `Resetar ${cat.label}`);
+        document.getElementById('resetButtonsContainer').appendChild(opt);
+
+        // option for filter select
+        const optSel = document.createElement('option'); optSel.value = cat.id; optSel.textContent = cat.label; filterSelect.appendChild(optSel);
+      });
+    }
+
+    // -------------------- Registrar e notificar --------------------
+    function now(){
+      const d = new Date();
+      return { iso: d.toISOString(), date: d.toLocaleDateString('pt-PT'), time: d.toLocaleTimeString('pt-PT') };
+    }
+
+    function registrarEntrada(catId){
+      data.contadores[catId] = (data.contadores[catId]||0) + 1;
+      data.contadores.total = (data.contadores.total||0) + 1;
+      const t = now();
+      data.historico.unshift({ categoria: catId, date: t.date, time: t.time, iso: t.iso });
+      save();
+      atualizarUI();
+      toast(`Nova entrada: ${categoriaLabel(catId)}`);
+      // se quisermos um modal local com conteúdo, aqui poderíamos abrir
+    }
+
+    function categoriaLabel(id){ return categorias.find(c=>c.id===id)?.label || id }
+
+    // -------------------- UI: atualizar contadores e histórico --------------------
+    const historyList = document.getElementById('historyList');
+    const totalDisplay = document.getElementById('totalDisplay');
+
+    function atualizarUI(){
+      categorias.forEach(c=>{
+        const el = document.getElementById(`count-${c.id}`);
+        if(el) el.textContent = data.contadores[c.id] || 0;
+      });
+      totalDisplay.textContent = `Total: ${data.contadores.total || 0}`;
+      document.getElementById('totalDisplay').textContent = `Total: ${data.contadores.total || 0}`;
+      atualizarHistoricoList();
+      atualizarGrafico();
+    }
+
+    function atualizarHistoricoList(filtered){
+      const items = (filtered || data.historico).slice(0,200);
+      historyList.innerHTML = '';
+      if(items.length === 0) historyList.innerHTML = '<div class="small">Nenhuma entrada encontrada</div>';
+      items.forEach(it=>{
+        const div = document.createElement('div'); div.className = 'history-item';
+        div.innerHTML = `<div><strong>${categoriaLabel(it.categoria)}</strong><div class="small">${it.date} ${it.time}</div></div><div class="small">${it.iso ? it.iso.split('T')[1].split('.')[0] : ''}</div>`;
+        historyList.appendChild(div);
+      });
+    }
+
+    // -------------------- Filtros --------------------
+    document.getElementById('btnAplicarFiltro').addEventListener('click',()=>{
+      const categoria = document.getElementById('filterCategoria').value;
+      const dataFiltro = document.getElementById('filterData').value;
+      let filtered = data.historico.slice();
+      if(categoria !== 'all') filtered = filtered.filter(i=>i.categoria===categoria);
+      if(dataFiltro) {
+        // formato yyyy-mm-dd -> comparar apenas a parte date ISO
+        filtered = filtered.filter(i=> i.iso && i.iso.startsWith(dataFiltro));
+      }
+      atualizarHistoricoList(filtered);
+    });
+
+    document.getElementById('btnLimparFiltro').addEventListener('click',()=>{
+      document.getElementById('filterCategoria').value = 'all';
+      document.getElementById('filterData').value = '';
+      atualizarHistoricoList();
+    });
+
+    // -------------------- Reset --------------------
+    const modalReset = document.getElementById('modalReset');
+    document.getElementById('btnReset').addEventListener('click',()=> openModal(modalReset) );
+    document.getElementById('closeReset').addEventListener('click',()=> closeModal(modalReset));
+
+    function resetIndividual(catId){
+      if(!confirm(`Confirmar reset de ${categoriaLabel(catId)}?`)) return;
+      const removed = data.contadores[catId] || 0;
+      data.historico = data.historico.filter(h=>h.categoria !== catId);
+      data.contadores[catId] = 0;
+      data.contadores.total = Math.max(0, (data.contadores.total||0) - removed);
+      save(); atualizarUI(); toast(`${categoriaLabel(catId)} resetado`);
+    }
+
+    document.getElementById('resetAll').addEventListener('click',()=>{
+      if(!confirm('Confirmar reset de TODOS os contadores e histórico?')) return;
+      categorias.forEach(c=> data.contadores[c.id] = 0);
+      data.contadores.total = 0; data.historico = [];
+      save(); atualizarUI(); toast('Todos os dados foram resetados'); closeModal(modalReset);
+    });
+
+    // -------------------- Exportações --------------------
+    function exportTXT(){
+      let txt = 'RELATÓRIO BIBLIOTECA\n====================\n';
+      txt += `Data de exportação: ${new Date().toLocaleString('pt-PT')}\n`;
+      txt += `Total: ${data.contadores.total}\n\n`;
+      txt += 'ESTATÍSTICAS:\n';
+      categorias.forEach(c=> txt += `${c.label}: ${data.contadores[c.id] || 0}\n`);
+      txt += '\nHISTÓRICO:\n';
+      data.historico.forEach((h,i)=> txt += `${i+1}. ${h.date} ${h.time} - ${categoriaLabel(h.categoria)}\n`);
+      download(new Blob([txt],{type:'text/plain'}), `relatorio_biblioteca_${new Date().toISOString().split('T')[0]}.txt`);
+    }
+
+    function exportCSV(){
+      const headers = ['idx','iso','date','time','categoria'];
+      const rows = data.historico.map((h,i)=> [i+1, h.iso, h.date, h.time, h.categoria].map(escapeCSV).join(','));
+      const csv = [headers.join(','), ...rows].join('\n');
+      download(new Blob([csv],{type:'text/csv'}), `relatorio_biblioteca_${new Date().toISOString().split('T')[0]}.csv`);
+    }
+
+    function escapeCSV(val){ if(val===undefined||val===null) return ''; return '"'+String(val).replace(/"/g,'""')+'"'; }
+
+    function backupJSON(){
+      download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}), `backup_biblioteca_${new Date().toISOString().split('T')[0]}.json`);
+      toast('Backup JSON gerado');
+    }
+
+    function download(blob, filename){
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('btnExport').addEventListener('click',()=>{
+      // menu simples: prompt (evita popover complexo)
+      const op = prompt('Escolha exportação: 1) TXT  2) CSV  3) JSON (backup)\nDigite 1,2 ou 3');
+      if(op==='1') exportTXT(); else if(op==='2') exportCSV(); else if(op==='3') backupJSON();
+    });
+
+    document.getElementById('btnExportCSV').addEventListener('click', exportCSV);
+    document.getElementById('btnBackupJSON').addEventListener('click', backupJSON);
+
+    // -------------------- History modal --------------------
+    const modalHistory = document.getElementById('modalHistory');
+    document.getElementById('btnHistory').addEventListener('click',()=>{
+      const list = document.getElementById('modalHistoryList');
+      list.innerHTML = '';
+      if(data.historico.length===0) list.innerHTML = '<div class="small">Sem histórico</div>';
+      data.historico.forEach((h,i)=>{
+        const r = document.createElement('div'); r.style.padding='8px 0'; r.innerHTML = `<strong>${i+1}. ${categoriaLabel(h.categoria)}</strong><div class="small">${h.date} ${h.time}</div>`; list.appendChild(r);
+      });
+      openModal(modalHistory);
+    });
+    document.getElementById('closeHistory').addEventListener('click',()=> closeModal(modalHistory));
+
+    // -------------------- Modal helpers --------------------
+    function openModal(el){ el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
+    function closeModal(el){ el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
+
+    // -------------------- Toast --------------------
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+    function toast(text, ms=2400){
+      toastEl.textContent = text; toastEl.classList.add('show');
+      clearTimeout(toastTimer); toastTimer = setTimeout(()=> toastEl.classList.remove('show'), ms);
+    }
+
+    // -------------------- Theme toggle --------------------
+    const btnToggleTheme = document.getElementById('btnToggleTheme');
+    function setTheme(isLight){ document.body.classList.toggle('light', !!isLight); btnToggleTheme.setAttribute('aria-pressed', !!isLight); localStorage.setItem('biblioteca_theme', !!isLight ? 'light' : 'dark'); }
+    btnToggleTheme.addEventListener('click', ()=> setTheme(!document.body.classList.contains('light')) );
+    // carregar preferencia
+    (function(){ const t = localStorage.getItem('biblioteca_theme'); setTheme(t === 'light'); })();
+
+    // -------------------- Grafico --------------------
+    let chart = null;
+    function atualizarGrafico(){
+      const labels = categorias.map(c=> c.label);
+      const values = categorias.map(c=> data.contadores[c.id] || 0);
+      const ctx = document.getElementById('chart').getContext('2d');
+      if(chart) { chart.data.labels = labels; chart.data.datasets[0].data = values; chart.update(); return; }
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Entradas', data: values, backgroundColor: undefined }] },
+        options: { responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}} }
+      });
+    }
+
+    // -------------------- util --------------------
+    function categoriaOptions(){ return categorias.map(c=> `<option value="${c.id}">${c.label}</option>`).join(''); }
+
+    // -------------------- Inicialização --------------------
+    load(); criarBotoes(); atualizarUI();
+
+    // carregar reset buttons (already appended in criarBotoes)
+
+    // atalhos de teclado
+    window.addEventListener('keydown', (e)=>{
+      if(e.key==='Escape'){ document.querySelectorAll('.modal.open').forEach(m=>closeModal(m)); }
+      if(e.key==='t' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); setTheme(!document.body.classList.contains('light')); }
+    });
+
+    // pequenos ajustes de acessibilidade: foco por teclado
+    document.addEventListener('keyup', (e)=>{ if(e.key === 'Tab') document.body.classList.add('keyboard-nav'); });
+
+  </script>
+</body>
+</html>
